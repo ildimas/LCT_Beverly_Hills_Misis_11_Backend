@@ -4,22 +4,32 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from models import User
 from core.db import SessionLocal, engine
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Any
+from dotenv import load_dotenv
+load_dotenv()
 
 
-# router = APIRouter()
+tags_metadata = [
+    {"name": "Get"},
+    {"name": "Post"},
+    {"name": "Put"},
+    {"name": "Delete"}
+]
 
-auth_app = FastAPI()
+auth_app = FastAPI(openapi_tags=tags_metadata)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 origins = [
-    "http://localhost:3000",  # Adjust the port if your frontend runs on a different one
-    "https://yourfrontenddomain.com",
+    os.getenv('FRONTEND_HOST'),  # Adjust the port if your frontend runs on a different one
+    os.getenv('FRONTEND_DOMAIN'),
 ]
 
 auth_app.add_middleware(
@@ -60,7 +70,7 @@ def create_user(db: Session, user: UserCreate):
     db.commit()
     return "complete"
 
-@auth_app.post("/register")
+@auth_app.post("/register", tags=["Post"])
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=user.username)
     if db_user:
@@ -87,7 +97,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-@auth_app.post("/token")
+@auth_app.post("/token", tags=["Post"])
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(form_data.username, form_data.password, db)
     if not user:
@@ -113,7 +123,7 @@ def verify_token(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise HTTPException(status_code=403, detail="Token is invalid or expired")
 
-@auth_app.get("/verify-token/{token}")
+@auth_app.get("/verify-token/{token}", tags=["Get"])
 async def verify_user_token(token: str):
     verify_token(token=token)
     return {"message": "Token is valid"}
