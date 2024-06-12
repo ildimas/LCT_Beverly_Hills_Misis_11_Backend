@@ -1,13 +1,20 @@
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import os 
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import declarative_base, sessionmaker
+import os
 from dotenv import load_dotenv
+from typing import Generator
+
 load_dotenv()
 
-SQLALCHEMY_DATABASE_URL = 'postgresql+psycopg2://ildimas:@localhost:5432/main_db' #{os.getenv("DATABASEHOST")}
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SQLALCHEMY_DATABASE_URL = f'postgresql+asyncpg://ildimas:washingtonsilver@{os.getenv("DATABASEHOST")}/main_db'
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_async_engine(SQLALCHEMY_DATABASE_URL, future=True, echo=True, execution_options={"isolation_level": "AUTOCOMMIT"},)
 
-Base = declarative_base()
+async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+async def get_db() -> Generator:
+    try:
+        session: AsyncSession = async_session()
+        yield session
+    finally:
+        await session.close()

@@ -1,17 +1,16 @@
 from fastapi import FastAPI
 import uvicorn
-from routes import auth
-from fastapi.openapi.utils import get_openapi
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from API.App.api.routes.user import user_router
+from fastapi.openapi.utils import get_openapi
+
 from dotenv import load_dotenv
 load_dotenv()
 
-app = FastAPI()
-app.mount("/auth", auth.auth_app)
-
-@app.get("/")
-async def root():
-    return {"message": "alive"}
+app = FastAPI(title="washingtonsilver")
+app.include_router(user_router, prefix="/user", tags=["user"])
 
 
 if __name__ == "__main__":

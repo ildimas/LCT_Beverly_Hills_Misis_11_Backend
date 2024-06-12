@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update -y \
     && apt-get install -y python3-pip 
 
-WORKDIR /app
+WORKDIR /API
 
 COPY requirements.txt .
 RUN pip install --upgrade pip \
