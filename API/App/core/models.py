@@ -1,10 +1,10 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, LargeBinary, ForeignKey
 # from core.db import Base
 # from core.db import engine
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from sqlalchemy import Boolean
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import relationship, declarative_base
 import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from db import engine
@@ -16,14 +16,51 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     password = Column(String, nullable=False)
-    is_active = Column(Boolean(), default=True)
+    categories = relationship("Category", back_populates="user", cascade="all, delete, delete-orphan")
 
-# async def init_models():
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.drop_all)
-#         await conn.run_sync(Base.metadata.create_all)
+class Category(Base):
+    __tablename__ = "categories"
+    category_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete="CASCADE"))
+    name = Column(String, nullable=False, unique=True)
+    user = relationship("User", back_populates="categories")
+    allocations = relationship("Allocation", back_populates="category", cascade="all, delete, delete-orphan")
 
-# init_models()
+class Allocation(Base):
+    __tablename__ = "allocations"
+    alloc_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_uuid = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete="CASCADE"))
+    category_id = Column(UUID(as_uuid=True), ForeignKey('categories.category_id', ondelete="CASCADE"))
+    name = Column(String, nullable=False)
+    alloc_result_csv = Column(LargeBinary, nullable=True)
+    alloc_result_xlsx = Column(LargeBinary, nullable=True)
+    category = relationship("Category", back_populates="allocations")
+    bills_to_pay = relationship("BillToPay", back_populates="allocation", cascade="all, delete, delete-orphan")
+    reference_books = relationship("ReferenceBook", back_populates="allocation", cascade="all, delete, delete-orphan")
+    predictions = relationship("Predictions", back_populates="allocation", cascade="all, delete, delete-orphan")
+
+class BillToPay(Base):
+    __tablename__ = "bills_to_pay"
+    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    allocation_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"))
+    bills_to_pay = Column(LargeBinary, nullable=True)
+    allocation = relationship("Allocation", back_populates="bills_to_pay")
+
+class ReferenceBook(Base):
+    __tablename__ = "reference_books"
+    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    allocation_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"))
+    reference1 = Column(LargeBinary, nullable=True)
+    reference2 = Column(LargeBinary, nullable=True)
+    reference3 = Column(LargeBinary, nullable=True)
+    reference4 = Column(LargeBinary, nullable=True)
+    allocation = relationship("Allocation", back_populates="reference_books")
+
+class Predictions(Base):
+    __tablename__ = "prediction_files"
+    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    allocation_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"))
+    csv_data = Column(LargeBinary, nullable=False)
+    allocation = relationship("Allocation", back_populates="predictions")
