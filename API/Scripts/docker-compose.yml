@@ -1,0 +1,48 @@
+services:
+  backend:
+    build:
+      context: ..
+    container_name: backend
+    image: ildimas/backend_washingtonsilver:latest
+    environment:
+      - FRONTEND_HOST=localhost:3000
+      - FRONTEND_DOMAIN=my_domain.com
+      - LOCALHOST=backend
+      - DATABASEHOST=db
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - SECRET_KEY=secret_key
+
+    networks:
+      - MainNetwork
+    depends_on:
+      - db   
+  db:
+    image: postgres
+    container_name: db
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: washingtonsilver  #${POSTGRES_PASSWORD}
+      POSTGRES_USER: "ildimas"              #${POSTGRES_USER}
+      POSTGRES_DB: "main_db"                #${POSTGRES_DB}
+      DATABASEHOST: "db"
+    ports:
+      - "5432:5432"
+    networks:
+      - MainNetwork
+  
+  nginx:
+    build:
+      context: ../Nginx/
+    image: ildimas/nginx_washingtonsilver
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "8000:8000"
+    depends_on:
+      - backend
+    networks:
+      - MainNetwork
+networks:
+  MainNetwork:
+    driver: bridge
