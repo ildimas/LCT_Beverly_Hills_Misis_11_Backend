@@ -13,7 +13,9 @@ LETTER_MATCH_PATTERN = re.compile(r"^[а-яА-Яa-zA-Z\-]+$")
 
 
 class TunedModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = {
+        'from_attributes': True
+    }
         
 
 class ShowUser(TunedModel):
@@ -36,7 +38,6 @@ class UserCreate(BaseModel):
 class DeleteUserResponse(BaseModel):
     deleted_user_id: Union[uuid.UUID, None]
 
-
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -44,15 +45,37 @@ class Token(BaseModel):
 class CreateCategorySerializer(BaseModel):  
     name: str  
     
-class ShowCategorySerializer(BaseModel):
-    name: str
-    user_id: uuid.UUID
+class DeleteCategorySerializer(BaseModel):
+    category_id: Union[uuid.UUID, None]
     
 class CreateAllocationSerializer(BaseModel):
     name: str
     category_name: str
         
-class ShowAllocationSerializer(BaseModel):
+class ShowAllocationSerializer(TunedModel):
     name: str
-    category_name: str
+    category_id: uuid.UUID
     user_id: uuid.UUID
+    
+class DeleteAllocationSerializer(BaseModel):
+    allocation_id : Union[uuid.UUID, None]
+    
+class ShowAllCategoriesSerializer(TunedModel):
+    category_id: uuid.UUID
+    name: str
+    user_id: uuid.UUID
+    
+class ShowAllAllocationSerializer(TunedModel):
+    name: str
+    user_id: uuid.UUID
+    category_id: uuid.UUID
+    allocation_id: uuid.UUID
+    
+    
+#!####### Bills ##########
+
+#!########################
+
+#?####### Predictions ##########
+
+#?##############################
