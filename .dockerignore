@@ -165,3 +165,4 @@ envi/
 Dockerfile
 .dockerignore
 Nginx/
+Tests/

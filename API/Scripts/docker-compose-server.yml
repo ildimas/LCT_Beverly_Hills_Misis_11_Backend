@@ -39,6 +39,14 @@ services:
       - "8000:8000"
     depends_on:
       - backend
+      - frontend
+    networks:
+      - MainNetwork
+  frontend:
+    image: washingtonsilverstorage.cr.cloud.ru/washingtonsilver_frontend:latest
+    container_name: frontend
+    depends_on:
+      - backend
     networks:
       - MainNetwork
 networks:

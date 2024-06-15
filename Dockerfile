@@ -8,8 +8,15 @@ RUN apt-get update -y \
 
 WORKDIR /API
 
-COPY requirements.txt .
+COPY API/requirements.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
+COPY API .
 
-COPY . .
+WORKDIR /Algo
+COPY Algo .
+
+WORKDIR /ML
+COPY ML .
+
+WORKDIR /API
