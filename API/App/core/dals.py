@@ -8,8 +8,13 @@ from sqlalchemy import update
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 # from core.db import async_session
+from models import User, Category, Allocation, ReferenceBook, BillToPay
 
-from models import User, Category, Allocation
+from logging.config import dictConfig
+import logging
+from API.App.core.loging_config import LogConfig
+dictConfig(LogConfig().model_dump())
+logger = logging.getLogger("washingtonsilver")
 
 class UserDAL:
     def __init__(self, db_session: AsyncSession):
@@ -153,4 +158,101 @@ class PredictionDAL:
      def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
     
+
+class ReferenceDAL:
+    def __init__(self, db_session: AsyncSession):
+        self.db_session = db_session
+        
+    async def delete_referencebooks(self, ref_id: UUID, user_id: UUID) -> Union[UUID, None]:
+        query = delete(ReferenceBook).where(
+            and_(ReferenceBook.user_id == user_id,
+                 ReferenceBook.ref_id == ref_id)
+            ).returning(ReferenceBook.ref_id)
+        res = await self.db_session.execute(query)
+        deleted_row = res.fetchone()
+        if deleted_row:
+            await self.db_session.commit()  
+            return deleted_row[0]
+        else:
+            await self.db_session.rollback()  # Rollback in case of failure
+            return None 
     
+    async def _create_referencebook(self, allocation_id : UUID, user_id: UUID, files : dict) -> ReferenceBook:
+        if await self.is_reference_exist(allocation_id=allocation_id, user_id=user_id,):
+            raise HTTPException(status_code=400, detail="The referencebooks already created for this allocation")
+        new_refbook = ReferenceBook(
+            user_id=user_id,
+            alloc_id=allocation_id,
+            contracts=files.get("contacts"),
+            codes=files.get("codes"),
+            fixedassets=files.get("fixedassets"),
+            building_squares=files.get("building_squares"),
+            contracts_to_building=files.get("contracts_to_building"),
+        )
+        self.db_session.add(new_refbook)
+        try:
+            await self.db_session.flush()
+        except IntegrityError:
+            await self.db_session.rollback()
+            raise
+        return new_refbook
+    
+    async def is_reference_exist(self, allocation_id: UUID, user_id: UUID) -> bool:
+        query = select(ReferenceBook).where(
+            and_(ReferenceBook.alloc_id == allocation_id,
+            ReferenceBook.user_id == user_id
+        ))
+        res = await self.db_session.execute(query)
+        if res.scalars().first():
+            logger.warning(f"Reference found for allocation_id: {allocation_id} and user_id: {user_id}")
+            return True
+        else:
+            logger.info(f"No reference found for allocation_id: {allocation_id} and user_id: {user_id}")
+            return False
+        
+class BillDAL:
+    def __init__(self, db_session: AsyncSession):
+        self.db_session = db_session
+        
+    async def delete_bill(self, bill_id: UUID, user_id: UUID) -> Union[UUID, None]:
+        query = delete(BillToPay).where(
+            and_(BillToPay.user_id == user_id,
+                 BillToPay.bill_id == bill_id)
+            ).returning(BillToPay.bill_id)
+        res = await self.db_session.execute(query)
+        deleted_row = res.fetchone()
+        if deleted_row:
+            await self.db_session.commit()  
+            return deleted_row[0]
+        else:
+            await self.db_session.rollback()  # Rollback in case of failure
+            return None 
+    
+    async def _create_bill(self, allocation_id : UUID, user_id: UUID, files : dict) -> ReferenceBook:
+        if await self.is_bill_exist(allocation_id=allocation_id, user_id=user_id,):
+            raise HTTPException(status_code=400, detail="The bill already created for this allocation")
+        new_bill = BillToPay(
+            user_id=user_id,
+            alloc_id=allocation_id,
+            bills_to_pay=files.get("bills_to_pay")
+        )
+        self.db_session.add(new_bill)
+        try:
+            await self.db_session.flush()
+        except IntegrityError:
+            await self.db_session.rollback()
+            raise
+        return new_bill
+    
+    async def is_bill_exist(self, allocation_id: UUID, user_id: UUID) -> bool:
+        query = select(BillToPay).where(
+            and_(BillToPay.alloc_id == allocation_id,
+            BillToPay.user_id == user_id
+        ))
+        res = await self.db_session.execute(query)
+        if res.scalars().first():
+            logger.warning(f"Reference found for allocation_id: {allocation_id} and user_id: {user_id}")
+            return True
+        else:
+            logger.info(f"No reference found for allocation_id: {allocation_id} and user_id: {user_id}")
+            return False

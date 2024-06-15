@@ -1,11 +1,11 @@
 import openpyxl
 
-path3800_2023 = "sber_files/Счета на оплату 3800-2023.xlsx"
-contracts = "sber_files/Договоры.xlsx"
-codes = "sber_files/Коды услуг.xlsx"
-fixed_assets = "sber_files/Основные средства.xlsx"
-buildings_square = "sber_files/Площади зданий.xlsx"
-contracts_buildings = "sber_files/Связь договор - здания.xlsx"
+path3800_2023 = "sber_files/Счета на оплату 3800-2023.XLSX"
+contracts = "sber_files/Договоры.XLSX"
+codes = "sber_files/Коды услуг.XLSX"
+fixed_assets = "sber_files/Основные средства.XLSX"
+buildings_square = "sber_files/Площади зданий.XLSX"
+contracts_buildings = "sber_files/Связь договор - здания.XLSX"
 
 # парсинг счетов на оплату
 wb_obj_path3800_2023 = openpyxl.load_workbook(path3800_2023)

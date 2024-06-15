@@ -9,6 +9,7 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from db import engine
 import asyncio
+from sqlalchemy_media import File, FileSystemStore, StoreManager
 
 Base = declarative_base()
 
@@ -46,7 +47,7 @@ class BillToPay(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete="CASCADE"), nullable=False)
     bill_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     alloc_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"), nullable=False)
-    bills_to_pay = Column(LargeBinary, nullable=True)
+    bills_to_pay = Column(LargeBinary, nullable=False)
     allocation = relationship("Allocation", back_populates="bills_to_pay")
 
 class ReferenceBook(Base):
@@ -54,10 +55,11 @@ class ReferenceBook(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete="CASCADE"), nullable=False)
     ref_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     alloc_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"), nullable=False)
-    reference1 = Column(LargeBinary, nullable=True)
-    reference2 = Column(LargeBinary, nullable=True)
-    reference3 = Column(LargeBinary, nullable=True)
-    reference4 = Column(LargeBinary, nullable=True)
+    contracts = Column(LargeBinary, nullable=True)
+    codes = Column(LargeBinary, nullable=True)
+    fixedassets = Column(LargeBinary, nullable=True)
+    building_squares = Column(LargeBinary, nullable=True)
+    contracts_to_building = Column(LargeBinary, nullable=True)
     allocation = relationship("Allocation", back_populates="reference_books")
 
 class Predictions(Base):

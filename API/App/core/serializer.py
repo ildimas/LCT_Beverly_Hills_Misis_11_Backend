@@ -1,17 +1,19 @@
 import re
 import uuid
 from typing import Optional, Union
-
-from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic import constr
 from pydantic import EmailStr
 from pydantic import field_validator
 from API.App.core.models import User
+from fastapi import  HTTPException
+from API.App.core.dals import ReferenceDAL
 
 LETTER_MATCH_PATTERN = re.compile(r"^[а-яА-Яa-zA-Z\-]+$")
 
-
+class FileResponseModel(BaseModel):
+    url: str
+    
 class TunedModel(BaseModel):
     model_config = {
         'from_attributes': True
@@ -34,6 +36,7 @@ class UserCreate(BaseModel):
                 status_code=422, detail="password should be at least length 8"
             )
         return value
+
 
 class DeleteUserResponse(BaseModel):
     deleted_user_id: Union[uuid.UUID, None]
@@ -69,13 +72,43 @@ class ShowAllAllocationSerializer(TunedModel):
     name: str
     user_id: uuid.UUID
     category_id: uuid.UUID
-    allocation_id: uuid.UUID
+    alloc_id: uuid.UUID
     
     
 #!####### Bills ##########
 
+
+
+
+# class CreateReferenceBooksSerializer(BaseModel):
+#     alloc_id: uuid.UUID
+    
+class ReferenceBooksSerializer(TunedModel):
+    alloc_id: uuid.UUID
+    ref_id: uuid.UUID
+    
+class DeleteReferenceBooksSerializer(TunedModel):
+    ref_id: Union[uuid.UUID, None]
+    
+
+class BillsSerializer(TunedModel):
+    alloc_id: uuid.UUID
+    bill_id: uuid.UUID
+    
+class DeleteBillsSerializer(TunedModel):
+    bill_id: Union[uuid.UUID, None]
+    
+    
 #!########################
 
 #?####### Predictions ##########
 
 #?##############################
+
+######## Allocation config ##########
+
+# class AllocationConfig(BaseModel):
+    
+
+
+#####################################

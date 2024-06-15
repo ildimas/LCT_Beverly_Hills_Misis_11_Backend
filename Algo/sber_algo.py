@@ -5,6 +5,7 @@ for i in range(1, sber_files_parser.sheet_obj_path3800_2023.max_column + 1):
     input.append(sber_files_parser.sheet_obj_path3800_2023.cell(row = 353, column = i).value)
 # принимаем - Компания, год, номер счёта, позиция счёта, ID услуги, ID договора, дата отражения учёта, стоимость без ДНС
 
+#! Базовый
 # список всех связанных ЗДН с ДПН
 build_contracts = []
 build_contracts_found = 0
@@ -32,8 +33,9 @@ for key in build_contracts_squares:
         elif (key == sber_files_parser.sheet_obj_buildings_square.cell(row = j, column = 1).value):
             build_contracts_squares_info.append(sber_files_parser.sheet_obj_buildings_square.cell(row = j, column = 6).value)
             build_contracts_squares_found += 1
-
 offer_s_code = 0
+#! ###########################
+#? Опциональный ################################
 # класс услуги
 for i in range(2, sber_files_parser.sheet_obj_codes.max_row):
     if (input[4] == sber_files_parser.sheet_obj_codes.cell(row = i, column = 1).value):

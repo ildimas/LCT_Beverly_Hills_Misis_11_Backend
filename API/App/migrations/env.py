@@ -2,8 +2,12 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
+import os, sys
+sys.path.append(os.path.dirname(os.path.abspath("../")))
 from alembic import context
+from API.App.core.models import Base
+from dotenv import load_dotenv
+load_dotenv()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -11,12 +15,12 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+fileConfig(config.config_file_name)
 
+sql_alchemy_url = f'postgresql://{os.getenv("POSTGRES_USER")}:{os.getenv("POSTGRES_PASSWORD")}@{os.getenv("DATABASEHOST")}/{os.getenv("POSTGRES_DB")}'
+config.set_main_option("sqlalchemy.url", sql_alchemy_url)
 # add your model's MetaData object here
 # for 'autogenerate' support
-from core.models import Base
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
@@ -24,7 +28,8 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.

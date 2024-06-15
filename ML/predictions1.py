@@ -4,8 +4,8 @@ from prophet import Prophet
 import glob
 import joblib
 
-percent=0
-file_path = 'data'
+percent = 0
+file_path = 'data5400-2024.XLSX'
 data = pd.read_excel(file_path)
 
 
@@ -21,7 +21,7 @@ buildings_to_predict = data_cleaned['Здание'].unique()
 
 next_month_start = (max_date + pd.offsets.MonthBegin(1)).replace(day=1)
 
-models = joblib.load('model.pkl')
+models = joblib.load('J_final_model_with_regressor_sps0.1_cps0.1_foureir1.pkl')
 
 future_months = pd.DataFrame({'ds': pd.date_range(start=next_month_start, periods=5, freq='MS')})
 
@@ -38,7 +38,7 @@ for building_id in buildings_to_predict:
         forecast['Здание'] = building_id
         predictions[building_id] = forecast[['ds', 'yhat', 'Здание']]
         percent += 1
-        #print(f"{'{:.2f}'.format((percent / len(buildings_to_predict)) * 100)}")
+        print(f"{'{:.2f}'.format((percent / len(buildings_to_predict)) * 100)}")
 
 all_predictions = pd.concat(predictions.values(), axis=0).reset_index(drop=True)
 print(all_predictions)

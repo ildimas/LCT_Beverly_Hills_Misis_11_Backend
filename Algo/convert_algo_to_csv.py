@@ -21,7 +21,7 @@ with open(filename_csv, mode='w', newline='') as file:
 print("CSV файл был успешно записан!")
 
 # пишем xlsx
-filename_xlsx = "sample.xlsx"
+filename_xlsx = "sample.XLSX"
 wb = Workbook()
 ws = wb.active
 
