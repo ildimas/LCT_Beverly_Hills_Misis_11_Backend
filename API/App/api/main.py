@@ -11,10 +11,22 @@ from API.App.api.routes.prediction import prediction_router
 from API.App.api.routes.bills_and_refs import billsandrefs_router
 from fastapi.openapi.utils import get_openapi
 
+from logging.config import dictConfig
+import logging
+from API.App.core.loging_config import LogConfig
+dictConfig(LogConfig().model_dump())
+logger = logging.getLogger("washingtonsilver")
+
+# logger.info("Dummy Info")
+# logger.error("Dummy Error")
+# logger.debug("Dummy Debug")
+# logger.warning("Dummy Warning")
+
 from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(title="washingtonsilver")
+
 app.include_router(user_router, prefix="/user", tags=["user"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(category_router, prefix="/category", tags=["category"])

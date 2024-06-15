@@ -30,6 +30,9 @@ async def create_new_allocation(body: CreateAllocationSerializer, db: AsyncSessi
 async def delete_allocation(body: CreateAllocationSerializer, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user_from_token)) -> DeleteAllocationSerializer:
     return await _delete_allocation(body, db, current_user)
 
+# @allocation_router.post("/config")
+# async def configure_allocation(body: )
+
 
 ###########################################################################
 ############################UTILITY########################################
@@ -51,6 +54,6 @@ async def _delete_allocation(body: CreateAllocationSerializer, session, current_
     
 async def _show_all_allocations(session, current_user : User , category : Optional[str]) -> ShowAllAllocationSerializer:
     async with session.begin():
-        cat_dal = AllocationDAL(session)
-        result_categories = await cat_dal.show_all_allocations(current_user.user_id, category=category)
-        return [ShowAllAllocationSerializer.model_validate(category) for category in result_categories]
+        dal = AllocationDAL(session)
+        result_allocations = await dal.show_all_allocations(current_user.user_id, category=category)
+        return [ShowAllAllocationSerializer.model_validate(allocation) for allocation in result_allocations]

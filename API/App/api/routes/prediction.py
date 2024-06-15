@@ -16,6 +16,9 @@ load_dotenv()
 
 prediction_router = APIRouter()
 
+@prediction_router.get("/")
+def hello_smal_redeployment_system():
+    return {"message": "hello this endpoint showed here automaticly"}
 ###########################################################################
 ############################UTILITY########################################
 ###########################################################################
