@@ -1,4 +1,4 @@
-from typing import Union, List, Optional
+from typing import Union, List, Optional, BinaryIO
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from fastapi import  HTTPException
@@ -9,10 +9,12 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 # from core.db import async_session
 from models import User, Category, Allocation, ReferenceBook, BillToPay
-
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import SQLAlchemyError
 from logging.config import dictConfig
 import logging
 from API.App.core.loging_config import LogConfig
+from Algo.sber_algo import MainAllocationAssembler
 dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("washingtonsilver")
 
@@ -101,6 +103,37 @@ class AllocationDAL:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
         
+    async def _check_allocation_objects(self, inspected_object_class, alloc_id: UUID, user_id: UUID) -> bool:
+        query = select(inspected_object_class).where(
+            and_(inspected_object_class.user_id == user_id,
+                 inspected_object_class.alloc_id == alloc_id)
+        )
+        try:
+            res = await self.db_session.execute(query)
+            obj = res.scalar_one_or_none()
+            logger.info(f"Validation object: Found !")
+            return obj is not None
+        except NoResultFound:
+            logger.error(f"No result found for user_id: {user_id} and alloc_id: {alloc_id}")
+            return False
+        except SQLAlchemyError as e:
+            logger.error(f"Database error occurred: {e}")
+            return False
+    
+    async def _get_allocation_objects(self, inspected_object_class, alloc_id: UUID, user_id: UUID, fields: List[str]) -> dict[str, bytes]:
+        columns = [getattr(inspected_object_class, field) for field in fields]
+        query = select(*columns).where(
+            and_(inspected_object_class.user_id == user_id,
+                 inspected_object_class.alloc_id == alloc_id)
+        )
+        res = await self.db_session.execute(query)
+        obj = res.fetchone()
+        if obj is not None:
+            result = {field: getattr(obj, field) for field in fields}
+            return result
+        return {}
+    
+        
     async def show_all_allocations(self, user_id: UUID, category: Optional[str] = None) -> List[Allocation]:
         query = select(Allocation).where(Allocation.user_id == user_id)
         if category:
@@ -153,7 +186,54 @@ class AllocationDAL:
         else:
             await self.db_session.rollback()  # Rollback in case of failure
             return None 
-
+        
+    #! Allocation main processing   
+    async def validate_and_process_allocation(self, allocation_id : UUID, user_id : UUID, rules : dict):
+        if (await self._check_allocation_objects(ReferenceBook, allocation_id, user_id) ==
+            await self._check_allocation_objects(BillToPay, allocation_id, user_id)) == True:
+            logger.info("Allocation validation sucsess")
+            bills_dict = await self._get_allocation_objects(BillToPay, allocation_id, user_id, ["bills_to_pay",])
+            reference_dict = await self._get_allocation_objects(ReferenceBook, allocation_id, user_id, ["contracts", "codes", "fixedassets", "building_squares", "contracts_to_building"])
+            logger.info(f"Allocation items: Getted!!!")
+            allocation_assembler = MainAllocationAssembler(bills_dict, reference_dict, rules)
+            csv_binary, xlsx_binary = await allocation_assembler.main()
+            await self._write_allocation_results(allocation_id, user_id, csv_binary, xlsx_binary)
+        else:
+            raise HTTPException(status_code=400, detail="Required object or objects are missing")
+        
+    async def _write_allocation_results(self, allocation_id : UUID, user_id : UUID, csv_binary : BinaryIO, xlsx_binary : BinaryIO):
+        query = select(Allocation).where(
+            and_(Allocation.user_id == user_id,
+                Allocation.alloc_id == allocation_id)
+        )
+        res = await self.db_session.execute(query)
+        alloc_to_modify = res.scalar_one()
+        alloc_to_modify.alloc_result_csv = csv_binary
+        alloc_to_modify.alloc_result_xlsx = xlsx_binary
+        await self.db_session.commit()
+        
+    async def download_allocation_content(self, allocation_id : UUID, user_id : UUID, xlsx_or_csv : bool):
+        query = select(Allocation).where(
+            and_(Allocation.user_id == user_id,
+                Allocation.alloc_id == allocation_id)
+        )
+        res = await self.db_session.execute(query)
+        file_data = res.scalar_one_or_none()
+        
+        if file_data is None:
+            raise HTTPException(status_code=404, detail="Allocation not found")
+        
+        field = 'alloc_result_csv' if xlsx_or_csv else 'alloc_result_xlsx'
+        if not hasattr(file_data, field):
+            raise HTTPException(status_code=400, detail="Invalid field name")
+        
+        file_content = getattr(file_data, field)
+        if file_content is None:
+            raise HTTPException(status_code=404, detail="File content not found in the specified field")
+        return file_content
+        
+        
+        
 class PredictionDAL:
      def __init__(self, db_session: AsyncSession):
         self.db_session = db_session

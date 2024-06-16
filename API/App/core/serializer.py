@@ -4,7 +4,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import constr
 from pydantic import EmailStr
-from pydantic import field_validator
+from pydantic import field_validator, ValidationError
 from API.App.core.models import User
 from fastapi import  HTTPException
 from API.App.core.dals import ReferenceDAL
@@ -27,17 +27,17 @@ class ShowUser(TunedModel):
     
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
+
+class ProcessAllocationInput(BaseModel):
+    allocation_id : uuid.UUID
+    rules : dict
     
-    @field_validator("password")
-    def validate_password(cls, value):
-        if len(value) < 8:
-            raise HTTPException(
-                status_code=422, detail="password should be at least length 8"
-            )
-        return value
-
-
+class DownloadAllocation(BaseModel):
+    allocation_id : uuid.UUID
+    xlsx_or_csv : bool
+        
+    
 class DeleteUserResponse(BaseModel):
     deleted_user_id: Union[uuid.UUID, None]
 
@@ -77,9 +77,6 @@ class ShowAllAllocationSerializer(TunedModel):
     
 #!####### Bills ##########
 
-
-
-
 # class CreateReferenceBooksSerializer(BaseModel):
 #     alloc_id: uuid.UUID
     
@@ -89,7 +86,6 @@ class ReferenceBooksSerializer(TunedModel):
     
 class DeleteReferenceBooksSerializer(TunedModel):
     ref_id: Union[uuid.UUID, None]
-    
 
 class BillsSerializer(TunedModel):
     alloc_id: uuid.UUID
