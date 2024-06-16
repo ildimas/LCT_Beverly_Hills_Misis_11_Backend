@@ -1,0 +1,48 @@
+services:
+  backend:
+    build:
+      context: ../../
+    command: bash -c "cd App && alembic upgrade head && cd api && python main.py"
+    container_name: backend
+    image: washingtonsilverstorage.cr.cloud.ru/washingtonsilver_api:latest
+    environment:
+      - FRONTEND_HOST=localhost:3000
+      - FRONTEND_DOMAIN=my_domain.com
+      - LOCALHOST=backend
+      - DATABASEHOST=db
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - SECRET_KEY=secret_key
+      - POSTGRES_USER=ildimas             
+      - POSTGRES_DB=main_db   
+      - POSTGRES_PASSWORD=washingtonsilver             
+    networks:
+      - MainNetwork
+    depends_on:
+      - db   
+  db:
+    image: postgres
+    container_name: db
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: washingtonsilver  #${POSTGRES_PASSWORD}
+      POSTGRES_USER: "ildimas"              #${POSTGRES_USER}
+      POSTGRES_DB: "main_db"                #${POSTGRES_DB}
+      DATABASEHOST: "db"
+    ports:
+      - "5432:5432"
+    networks:
+      - MainNetwork
+  
+  nginx:
+    image: washingtonsilverstorage.cr.cloud.ru/washingtonsilver_nginx@sha256:afd0ba1cd4504ed5695aaded04faa4d33c70fb3decd90db41a7555d4bab2c059
+    container_name: nginx
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
+    networks:
+      - MainNetwork
+networks:
+  MainNetwork:
+    driver: bridge

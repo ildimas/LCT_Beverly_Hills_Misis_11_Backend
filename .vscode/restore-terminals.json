@@ -1,0 +1,40 @@
+{ 
+  "artificialDelayMilliseconds": 700,
+  "keepExistingTerminalsOpen": false,
+  "runOnStartup": true,
+  "terminals": [
+    {
+      "splitTerminals": [
+        {
+          "name": "API",
+          "commands": ["cd API", "cd App", "cd api"]
+        }
+      ]
+    },
+    {
+      "splitTerminals": [
+        {
+          "name": "Tests",
+          "commands": ["cd Tests"]
+        }
+      ]
+    },
+    {
+      "splitTerminals": [
+        {
+          "name": "Docker building",
+          "commands": ["cd API", "cd Scripts"]
+        }
+      ]
+    },
+    {
+      "splitTerminals": [
+        {
+          "name": "Root",
+          "commands": ["cd API"]
+        }
+      ]
+    }
+  ]
+}
+    
