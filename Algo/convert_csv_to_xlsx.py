@@ -1,5 +1,8 @@
 import pandas as pd
 import io
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 from typing import BinaryIO
 import csv
 
@@ -16,12 +19,9 @@ class DATA_CSV_XLSX_Converter:
         return excel_buffer.getvalue()
     
     def data_to_csv(self, headers_list, data):
-        output = io.BytesIO()
-        with io.TextIOWrapper(output, encoding='utf-8', newline='') as text_file:
-            writer = csv.writer(text_file, delimiter=';')
-            writer.writerow(headers_list)
-            for row in data:
-                writer.writerow(row)
-            csv_binary_data = output.getvalue()
-        #csv binary
-        return csv_binary_data
+        csv_buffer = io.StringIO()
+        csv_writer = csv.writer(csv_buffer)
+        csv_writer.writerow(headers_list)
+        csv_writer.writerows(data)
+        csv_binary_string = csv_buffer.getvalue().encode('utf-8')  # Convert to binary
+        return csv_binary_string
