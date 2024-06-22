@@ -193,10 +193,11 @@ class AllocationDAL:
             await self._check_allocation_objects(BillToPay, allocation_id, user_id)) == True:
             logger.info("Allocation validation sucsess")
             bills_dict = await self._get_allocation_objects(BillToPay, allocation_id, user_id, ["bills_to_pay",])
+            # logger.debug(f"Bills dict - {bills_dict}")
             reference_dict = await self._get_allocation_objects(ReferenceBook, allocation_id, user_id, ["contracts", "codes", "fixedassets", "building_squares", "contracts_to_building"])
             logger.info(f"Allocation items: Getted!!!")
             allocation_assembler = MainAllocationAssembler(bills_dict, reference_dict, rules)
-            csv_binary, xlsx_binary = await allocation_assembler.main()
+            csv_binary, xlsx_binary = allocation_assembler.main()
             await self._write_allocation_results(allocation_id, user_id, csv_binary, xlsx_binary)
         else:
             raise HTTPException(status_code=400, detail="Required object or objects are missing")
