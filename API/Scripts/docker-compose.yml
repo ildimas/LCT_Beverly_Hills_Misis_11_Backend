@@ -21,7 +21,7 @@ services:
     depends_on:
       - db   
   db:
-    image: postgres
+    image: washingtonsilverstorage.cr.cloud.ru/washingtonsilver_database:latest
     container_name: db
     restart: always
     environment:

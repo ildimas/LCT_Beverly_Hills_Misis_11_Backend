@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, LargeBinary, ForeignKey
+from sqlalchemy import Column, Integer, String, LargeBinary, ForeignKey, Date, Float
 # from core.db import Base
 # from core.db import engine
 from sqlalchemy.dialects.postgresql import UUID
@@ -66,6 +66,14 @@ class Predictions(Base):
     __tablename__ = "prediction_files"
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete="CASCADE"), nullable=False)
     preds_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    allocation_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"), nullable=False)
-    csv_data = Column(LargeBinary, nullable=False)
+    alloc_id = Column(UUID(as_uuid=True), ForeignKey('allocations.alloc_id', ondelete="CASCADE"), nullable=False)
+    
+    time_period = Column(Date, nullable=False)
+    building = Column(String, nullable=False)
+    price = Column(Float, nullable=False)
+    
+    main_ledger_id = Column(String, nullable=True)
+    fixed_assets_id = Column(String, nullable=True)
+    fixed_assets_class = Column(String, nullable=True)
+    
     allocation = relationship("Allocation", back_populates="predictions")

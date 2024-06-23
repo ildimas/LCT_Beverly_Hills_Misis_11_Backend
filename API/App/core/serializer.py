@@ -8,6 +8,7 @@ from pydantic import field_validator, ValidationError
 from API.App.core.models import User
 from fastapi import  HTTPException
 from API.App.core.dals import ReferenceDAL
+from datetime import datetime
 
 LETTER_MATCH_PATTERN = re.compile(r"^[а-яА-Яa-zA-Z\-]+$")
 
@@ -70,9 +71,11 @@ class ShowAllCategoriesSerializer(TunedModel):
     
 class ShowAllAllocationSerializer(TunedModel):
     name: str
+    category_name : str
     user_id: uuid.UUID
     category_id: uuid.UUID
     alloc_id: uuid.UUID
+    is_files : bool
     
     
 #!####### Bills ##########
@@ -99,6 +102,31 @@ class DeleteBillsSerializer(TunedModel):
 
 #?####### Predictions ##########
 
+class PredictionsInitSerializer(TunedModel):
+    allocation_id: uuid.UUID
+
+
+class BasePredictionInput(BaseModel):
+    searchable_value : str
+    alloc_id: uuid.UUID
+    months_to_show : int = Field(example=5) 
+    # filter_rules: Optional[dict] = Field(example={
+    #     "only_greater_than" : "5000",
+    #     ""
+    # })
+
+class BasePredictionResponseSerializer(TunedModel):
+    building : str
+    searchable_atribute : str
+    time_period : datetime
+    price : float
+
+class SearchAtributesPredictionsSerializer(TunedModel):
+    content : str
+
+class InitSearchAtributesPredictionsSerializer(SearchAtributesPredictionsSerializer):
+    alloc_id : uuid.UUID
+    search_atribute : str
 #?##############################
 
 ######## Allocation config ##########

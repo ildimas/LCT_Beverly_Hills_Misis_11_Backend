@@ -33,6 +33,10 @@ async def create_new_allocation(body: CreateAllocationSerializer, db: AsyncSessi
 async def delete_allocation(body: CreateAllocationSerializer, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user_from_token)) -> DeleteAllocationSerializer:
     return await _delete_allocation(body, db, current_user)
 
+@allocation_router.delete("/delete_by_id", response_model=DeleteAllocationSerializer)
+async def delete_allocation(body: DeleteAllocationSerializer, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user_from_token)) -> DeleteAllocationSerializer:
+    return await _delete_allocation_by_id(body, db, current_user)
+
 @allocation_router.post("/process")
 async def configure_allocation(body : ProcessAllocationInput, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user_from_token)):
     return await _start_allocation_process(db, body.allocation_id, current_user, body.rules)
@@ -60,11 +64,22 @@ async def _delete_allocation(body: CreateAllocationSerializer, session, current_
         result = await all_dal.delete_allocation(body.name, body.category_name, current_user.user_id)
         return DeleteAllocationSerializer(allocation_id=result)
     
+async def _delete_allocation_by_id(body: DeleteAllocationSerializer, session, current_user : User ) -> DeleteAllocationSerializer:
+    async with session.begin():
+        all_dal = AllocationDAL(session)
+        result = await all_dal.delete_allocation_by_id(allocation_id=body.allocation_id, user_id=current_user.user_id)
+        return DeleteAllocationSerializer(allocation_id=result)    
+    
 async def _show_all_allocations(session, current_user : User , category : Optional[str]) -> ShowAllAllocationSerializer:
     async with session.begin():
         dal = AllocationDAL(session)
         result_allocations = await dal.show_all_allocations(current_user.user_id, category=category)
-        return [ShowAllAllocationSerializer.model_validate(allocation) for allocation in result_allocations]
+        data = []
+        for allocation in result_allocations:
+            all_cat_name = await dal._get_category_by_id(user_id=current_user.user_id, category_id=allocation.category_id)
+            files_status = ((allocation.alloc_result_csv != None) and (allocation.alloc_result_xlsx != None))
+            data.append(ShowAllAllocationSerializer(name=allocation.name, category_name=all_cat_name, user_id=allocation.user_id, category_id=allocation.category_id, alloc_id=allocation.alloc_id, is_files=files_status))
+        return data
     
 
 async def _start_allocation_process(session, allocation_id : UUID ,current_user : User, rules : dict):
