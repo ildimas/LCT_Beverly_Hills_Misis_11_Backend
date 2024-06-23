@@ -4,10 +4,12 @@ from prophet import Prophet
 import glob
 import joblib
 from io import BytesIO
-import os, sys
+import os
+import sys
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
-
 
 class MashineLearning:
     def __init__(self, binary_data):
@@ -22,9 +24,8 @@ class MashineLearning:
         self.data_cleaned['year_month'] = self.data_cleaned['Дата отражения в учетной системе'].dt.to_period('M').dt.to_timestamp()
         #!##############################################################################################
         
-        
-    #TODO FIX THIS MISSING FILE BUG    
-    def main(self):
+    async def main(self):
+        loop = asyncio.get_event_loop()
         max_date = self.data_cleaned['Дата отражения в учетной системе'].max()
 
         buildings_to_predict = self.data_cleaned['Здание'].unique()
@@ -35,33 +36,42 @@ class MashineLearning:
         
         print(script_dir, model_path)
         
-        models = joblib.load(model_path)
+        models = await loop.run_in_executor(None, joblib.load, model_path)
 
         future_months = pd.DataFrame({'ds': pd.date_range(start=next_month_start, periods=12, freq='MS')})
 
         self.predictions = {}
-
-        for building_id in buildings_to_predict:
-            if building_id in models:
-                model = models[building_id]
-                future = future_months.copy()
-                average_area = self.data_cleaned[self.data_cleaned['Здание'] == building_id]['Площадь'].mean()
-                future['Площадь'] = average_area
-                forecast = model.predict(future)
-                forecast['Здание'] = building_id
-                
-                # Adding retained columns to the forecast
-                retained_columns = self.data_cleaned[self.data_cleaned['Здание'] == building_id][['Класс ОС', 'ID основного средства', 'Счет главной книги']].iloc[0]
-                forecast['Класс ОС'] = retained_columns['Класс ОС']
-                forecast['ID основного средства'] = retained_columns['ID основного средства']
-                forecast['Счет главной книги'] = retained_columns['Счет главной книги']
-                
-                self.predictions[building_id] = forecast[['ds', 'yhat', 'Здание', 'Класс ОС', 'ID основного средства', 'Счет главной книги']]
+        
+        tasks = [
+            self.predict_for_building(building_id, models[building_id], future_months.copy())
+            for building_id in buildings_to_predict if building_id in models
+        ]
+        
+        results = await asyncio.gather(*tasks)
+        
+        for result in results:
+            if result:
+                building_id, forecast = result
+                self.predictions[building_id] = forecast
                 self.percent += 1
                 print(f"{'{:.2f}'.format((self.percent / len(buildings_to_predict)) * 100)}")
 
         self.all_predictions = pd.concat(self.predictions.values(), axis=0).reset_index(drop=True)
         
+    async def predict_for_building(self, building_id, model, future):
+        loop = asyncio.get_event_loop()
+        average_area = self.data_cleaned[self.data_cleaned['Здание'] == building_id]['Площадь'].mean()
+        future['Площадь'] = average_area
+        forecast = await loop.run_in_executor(None, model.predict, future)
+        forecast['Здание'] = building_id
+        
+        retained_columns = self.data_cleaned[self.data_cleaned['Здание'] == building_id][['Класс ОС', 'ID основного средства', 'Счет главной книги']].iloc[0]
+        forecast['Класс ОС'] = retained_columns['Класс ОС']
+        forecast['ID основного средства'] = retained_columns['ID основного средства']
+        forecast['Счет главной книги'] = retained_columns['Счет главной книги']
+        
+        return building_id, forecast[['ds', 'yhat', 'Здание', 'Класс ОС', 'ID основного средства', 'Счет главной книги']]
+
     def get_percent(self):
         return self.percent
 
@@ -77,18 +87,19 @@ class MashineLearning:
                 row[1] = abs(row[1])
                 data_output.append(row)
         return data_output
-    
-if __name__ == "__main__":
-    with open('Beverley hills MISIS Allocation.xlsx', 'rb') as f:
-        binary_content = f.read()
-    
-    x = MashineLearning(binary_content)
-    x.main()
-    for key in x.predictions.keys():
-        for row in x.predictions[key].to_numpy():
-            row = row.tolist()
-            row[0] = row[0].to_pydatetime() if isinstance(row[0], pd.Timestamp) else row[0]
-            row[1] = abs(row[1])
-            print(row)
-    # print(x.predictions['ЗДН 5400/1/2505'].to_numpy()[0], type(x.predictions['ЗДН 5400/1/2505'].to_numpy()))
 
+if __name__ == "__main__":
+    async def main_async():
+        with open('data5400-2024.XLSX', 'rb') as f:
+            binary_content = f.read()
+        
+        x = MashineLearning(binary_content)
+        await x.main()
+        for key in x.predictions.keys():
+            for row in x.predictions[key].to_numpy():
+                row = row.tolist()
+                row[0] = row[0].to_pydatetime() if isinstance(row[0], pd.Timestamp) else row[0]
+                row[1] = abs(row[1])
+                print(row)
+    
+    asyncio.run(main_async())

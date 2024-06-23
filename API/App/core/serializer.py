@@ -110,10 +110,7 @@ class BasePredictionInput(BaseModel):
     searchable_value : str
     alloc_id: uuid.UUID
     months_to_show : int = Field(example=5) 
-    # filter_rules: Optional[dict] = Field(example={
-    #     "only_greater_than" : "5000",
-    #     ""
-    # })
+    filter_rules: Optional[dict] 
 
 class BasePredictionResponseSerializer(TunedModel):
     building : str

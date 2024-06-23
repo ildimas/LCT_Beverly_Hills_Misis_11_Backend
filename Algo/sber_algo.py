@@ -7,6 +7,16 @@ from Algo.sber_files_parser import BinaryXLSXParcer
 import asyncio
 from Algo.convert_csv_to_xlsx import DATA_CSV_XLSX_Converter
 
+
+#!################ LOGER #################
+from API.App.core.loging_config import LogConfig
+from logging.config import dictConfig
+import logging
+dictConfig(LogConfig().model_dump())
+logger = logging.getLogger("washingtonsilver")
+#!########################################
+
+
 # bills_binary : BytesIO, contracts_buildings_binary: Optional[BytesIO],
 #                  buildings_square_binary : Optional[BytesIO], codes_binary : Optional[BytesIO],
 #                  fixed_assets_binary : Optional[BytesIO], contracts_binary : Optional[BytesIO]
@@ -49,8 +59,11 @@ class MainAllocationAssembler:
         self.fixed_assets_data = list(self.fixed_assets.iter_rows(min_row=2, max_row=self.fixed_assets.max_row, values_only=True))
 
         for i in range(len(self.input)):
+            if i % 100 == 0:
+                logger.info(f"Cycle {i} of {len(self.input)}")
             await self.calculation(i)
 
+        #! Post processing 
         y = DATA_CSV_XLSX_Converter()
         csv_binary = y.data_to_csv(headers_list=self.headers, data=self.final_output)
         xlsx_binary = y.convert(csv_binary)

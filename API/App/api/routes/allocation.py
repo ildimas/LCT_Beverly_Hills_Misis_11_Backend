@@ -2,6 +2,8 @@ from fastapi import  HTTPException, status, APIRouter, Depends, Query
 import sys
 from uuid import UUID
 import os
+import tempfile
+from fastapi.responses import FileResponse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from API.App.core.models import User, Category
 from typing import List, Optional
@@ -90,13 +92,25 @@ async def _start_allocation_process(session, allocation_id : UUID ,current_user 
         return {"message": "Allocation have been sucsessfuly created and stored in database"}
     
     
-async def _download_content(session, allocation_id : UUID, current_user : User, xlsx_or_csv: bool):
+async def _download_content(session: AsyncSession, allocation_id: UUID, current_user: User, xlsx_or_csv: bool):
     async with session.begin():
         dal = AllocationDAL(session)
-        file_content = await dal.download_allocation_content(allocation_id=allocation_id, user_id = current_user.user_id, xlsx_or_csv=xlsx_or_csv)
-        return StreamingResponse(
-            io.BytesIO(file_content),
+        file_content = await dal.download_allocation_content(
+            allocation_id=allocation_id,
+            user_id=current_user.user_id,
+            xlsx_or_csv=xlsx_or_csv
+        )
+
+        file_extension = 'csv' if xlsx_or_csv else 'xlsx'
+        file_name = f"result.{file_extension}"
+
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}", mode='wb') as tmp_file:
+            tmp_file.write(file_content)
+            tmp_file_path = tmp_file.name
+
+        return FileResponse(
+            path=tmp_file_path,
             media_type="application/octet-stream",
-            headers={"Content-Disposition": f"attachment;filename=result.{'csv' if xlsx_or_csv else 'xlsx'}"}
-        )   
-        # return {"message" : f"File was sucssefully downloaded in {'csv' if xlsx_or_csv else 'xlsx'}"}
+            filename=file_name
+        )

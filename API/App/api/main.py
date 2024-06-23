@@ -27,21 +27,29 @@ logger = logging.getLogger("washingtonsilver")
 from dotenv import load_dotenv
 load_dotenv()
 
-# origins = [
-#     "http://localhost",
-#     "http://localhost:5173",
-#     "http://frontend:5173",
-#     "http://mp-prototype.ru:80",
-#     "http://mp-prototype.ru:80/",
-#     "http://mp-prototype.ru",
-#     "http://mp-prototype.ru/",
-#     "http://frontend:1635",
-#     "http://localhost:1635",
-#     "http://172.18.0.4:5173",
-#     "http://172.18.0.4:1635",
-#     "http://192.144.13.15:80",
-#     "http://192.144.13.15"
+# tags_metadata = [
+#     {
+#         "name": "user",
+#         "description": "User is a base class which id contains in all other clasess this object can be: registred, deleted or authenificate",
+#     },
+#     {
+#         "name": "category",
+#         "description": "Categories is the second grade object in odject hierarchy. the main purpose of it is to filter allocations"
+#     },
+#     {
+#         "name": "allocation",
+#         "description": "The main onject in this api is allocations it contains your processed allocations and this object lead to reference books objects, bills to pay, and predicted values"
+#     },
+#     {
+#         "name": "rediction",
+#         "description": "The object holding procesed analytics results for allocation for a next 12 month. Contains various endpoints to easily filter out values"
+#     },
+#     {
+#         "name": "bills_and_refs",
+#         "description": "Group of object that stores all needed data to start allocation calculation"
+# #     }
 # ]
+#openapi_tags=tags_metadata, 
 
 app = FastAPI(title="washingtonsilver", docs_url="/api/docs", openapi_url="/api")
 

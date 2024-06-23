@@ -8,18 +8,21 @@ from sqlalchemy import update
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from datetime import datetime, timedelta
 # from core.db import async_session
 from models import User, Category, Allocation, ReferenceBook, BillToPay, Predictions
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import SQLAlchemyError
-from logging.config import dictConfig
-import logging
-from API.App.core.loging_config import LogConfig
 from Algo.sber_algo import MainAllocationAssembler
 from ML.predictions1 import MashineLearning
+#!################ LOGER #################
+from API.App.core.loging_config import LogConfig
+from logging.config import dictConfig
+import logging
 dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("washingtonsilver")
 
+#!########################################
 class UserDAL:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
@@ -284,23 +287,50 @@ class ReferenceDAL:
     
     async def _create_referencebook(self, allocation_id : UUID, user_id: UUID, files : dict) -> ReferenceBook:
         if await self.is_reference_exist(allocation_id=allocation_id, user_id=user_id,):
-            raise HTTPException(status_code=400, detail="The referencebooks already created for this allocation")
-        new_refbook = ReferenceBook(
-            user_id=user_id,
-            alloc_id=allocation_id,
+            query = select(ReferenceBook).where(
+            and_(ReferenceBook.alloc_id == allocation_id,
+            ReferenceBook.user_id == user_id))
+            res = await self.db_session.execute(query)
+            result = res.scalars().first()
             contracts=files.get("contacts"),
             codes=files.get("codes"),
             fixedassets=files.get("fixedassets"),
             building_squares=files.get("building_squares"),
             contracts_to_building=files.get("contracts_to_building"),
-        )
-        self.db_session.add(new_refbook)
-        try:
-            await self.db_session.flush()
-        except IntegrityError:
-            await self.db_session.rollback()
-            raise
-        return new_refbook
+            # Update the record
+            if files.get("contacts"):
+                result.contracts = files.get("contacts") 
+            if files.get("codes"):
+                result.codes = files.get("codes") 
+            if files.get("fixedassets"): 
+                result.fixedassets = files.get("fixedassets")
+            if files.get("building_squares"):
+                result.building_squares = files.get("building_squares") 
+            if files.get("contracts_to_building"):
+                result.contracts_to_building = files.get("contracts_to_building") 
+            try:
+                await self.db_session.commit()
+            except IntegrityError as e:
+                await self.db_session.rollback()
+                raise HTTPException(status_code=500, detail={"error": "Error with editing reference books", "details": str(e)})
+            return result
+        else: 
+            new_refbook = ReferenceBook(
+                user_id=user_id,
+                alloc_id=allocation_id,
+                contracts=files.get("contacts"),
+                codes=files.get("codes"),
+                fixedassets=files.get("fixedassets"),
+                building_squares=files.get("building_squares"),
+                contracts_to_building=files.get("contracts_to_building"),
+            )
+            self.db_session.add(new_refbook)
+            try:
+                await self.db_session.flush()
+            except IntegrityError:
+                await self.db_session.rollback()
+                raise
+            return new_refbook
     
     async def is_reference_exist(self, allocation_id: UUID, user_id: UUID) -> bool:
         query = select(ReferenceBook).where(
@@ -449,7 +479,7 @@ class PredictionDAL:
         if await self._is_ready_for_prediction(allocation_id=allocation_id, user_id=user_id):
             binary_allocation_result = await self._get_allocation_xlsx_result(allocation_id=allocation_id, user_id=user_id)
             ml_instance = MashineLearning(binary_data=binary_allocation_result)
-            ml_instance.main()
+            await ml_instance.main()
             predicted_data = ml_instance.get_all_data()
             for row in predicted_data:
                 prediction_record = Predictions(
@@ -469,13 +499,13 @@ class PredictionDAL:
                 await self.db_session.rollback()
     
     async def search_for_predictions(self, allocation_id : UUID, user_id: UUID, searchable_atribute:str, searchable_value:str, months:int):
-        query = select(Predictions).where(
-                    and_(
-                        Predictions.alloc_id == allocation_id,
-                        Predictions.user_id == user_id,
-                        getattr(Predictions, searchable_atribute) == searchable_value
-                    )
-                )
+        start_date = datetime.now()
+        end_date = start_date + timedelta(days=30 * months)
+        query = select(Predictions).where(and_(Predictions.alloc_id == allocation_id, 
+                                               Predictions.user_id == user_id, 
+                                               getattr(Predictions, searchable_atribute) == searchable_value,
+                                               Predictions.time_period >= start_date,  
+                                               Predictions.time_period <= end_date))
         result = await self.db_session.execute(query)
         records = result.scalars().all()
         return records
