@@ -4,10 +4,11 @@ from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import constr
 from pydantic import EmailStr
-from pydantic import field_validator
+from pydantic import field_validator, ValidationError
 from API.App.core.models import User
 from fastapi import  HTTPException
 from API.App.core.dals import ReferenceDAL
+from datetime import datetime
 
 LETTER_MATCH_PATTERN = re.compile(r"^[а-яА-Яa-zA-Z\-]+$")
 
@@ -27,17 +28,17 @@ class ShowUser(TunedModel):
     
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
+
+class ProcessAllocationInput(BaseModel):
+    allocation_id : uuid.UUID
+    rules : dict
     
-    @field_validator("password")
-    def validate_password(cls, value):
-        if len(value) < 8:
-            raise HTTPException(
-                status_code=422, detail="password should be at least length 8"
-            )
-        return value
-
-
+class DownloadAllocation(BaseModel):
+    allocation_id : uuid.UUID
+    xlsx_or_csv : bool
+        
+    
 class DeleteUserResponse(BaseModel):
     deleted_user_id: Union[uuid.UUID, None]
 
@@ -70,15 +71,14 @@ class ShowAllCategoriesSerializer(TunedModel):
     
 class ShowAllAllocationSerializer(TunedModel):
     name: str
+    category_name : str
     user_id: uuid.UUID
     category_id: uuid.UUID
     alloc_id: uuid.UUID
+    is_files : bool
     
     
 #!####### Bills ##########
-
-
-
 
 # class CreateReferenceBooksSerializer(BaseModel):
 #     alloc_id: uuid.UUID
@@ -89,7 +89,6 @@ class ReferenceBooksSerializer(TunedModel):
     
 class DeleteReferenceBooksSerializer(TunedModel):
     ref_id: Union[uuid.UUID, None]
-    
 
 class BillsSerializer(TunedModel):
     alloc_id: uuid.UUID
@@ -103,6 +102,28 @@ class DeleteBillsSerializer(TunedModel):
 
 #?####### Predictions ##########
 
+class PredictionsInitSerializer(TunedModel):
+    allocation_id: uuid.UUID
+
+
+class BasePredictionInput(BaseModel):
+    searchable_value : str
+    alloc_id: uuid.UUID
+    months_to_show : int = Field(example=5) 
+    filter_rules: Optional[dict] 
+
+class BasePredictionResponseSerializer(TunedModel):
+    building : str
+    searchable_atribute : str
+    time_period : datetime
+    price : float
+
+class SearchAtributesPredictionsSerializer(TunedModel):
+    content : str
+
+class InitSearchAtributesPredictionsSerializer(SearchAtributesPredictionsSerializer):
+    alloc_id : uuid.UUID
+    search_atribute : str
 #?##############################
 
 ######## Allocation config ##########

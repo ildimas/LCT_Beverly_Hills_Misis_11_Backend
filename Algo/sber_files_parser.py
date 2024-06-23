@@ -1,38 +1,35 @@
 import openpyxl
+import io
 import json
+import csv
+import sys
+import os
+import asyncio
+import aiofiles
+from concurrent.futures import ThreadPoolExecutor
 
-path3800_2023 = "sber_files/Счета на оплату тест.xlsx"
-contracts = "sber_files/Договоры.xlsx"
-codes = "sber_files/Коды услуг.xlsx"
-fixed_assets = "sber_files/Основные средства.xlsx"
-buildings_square = "sber_files/Площади зданий.xlsx"
-contracts_buildings = "sber_files/Связь договор - здания.xlsx"
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-# парсинг счетов на оплату
-wb_obj_path3800_2023 = openpyxl.load_workbook(path3800_2023)
-sheet_obj_path3800_2023 = wb_obj_path3800_2023.active
-wb_obj_path3800_2023.save(path3800_2023)
+class BinaryXLSXParcer:
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=5)  # Adjust the number of workers as needed
 
-# парсинг связи договора-зданий
-wb_obj_contracts_buildings = openpyxl.load_workbook(contracts_buildings)
-sheet_obj_contracts_buildings = wb_obj_contracts_buildings.active
-wb_obj_contracts_buildings.save(contracts_buildings)
-
-# парсинг площадей зданий
-wb_obj_buildings_square = openpyxl.load_workbook(buildings_square)
-sheet_obj_buildings_square = wb_obj_buildings_square.active
-wb_obj_buildings_square.save(buildings_square)
-
-# парсинг кодов услуг
-wb_obj_codes = openpyxl.load_workbook(codes)
-sheet_obj_codes = wb_obj_codes.active
-wb_obj_codes.save(codes)
-
-# парсинг основного средства
-wb_obj_fixed_assets = openpyxl.load_workbook(fixed_assets)
-sheet_obj_fixed_assets = wb_obj_fixed_assets.active
-wb_obj_fixed_assets.save(fixed_assets)
-
-# запись json
-with open("sber_files/data.JSON", 'r') as file:
-    data = json.load(file)
+    async def binary_parcer(self, binary):
+        if binary is None:
+            return None
+        loop = asyncio.get_event_loop()
+        doc = await loop.run_in_executor(self.executor, openpyxl.load_workbook, io.BytesIO(binary))
+        doc_sheet = doc.active
+        return doc_sheet
+    
+    async def get_json(self):
+        # Get the absolute path to the current script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Construct the absolute path to the data.json file
+        json_path = os.path.join(script_dir, "sber_files", "data.json")
+        
+        async with aiofiles.open(json_path, 'r') as file:
+            data = await file.read()
+        
+        return json.loads(data)

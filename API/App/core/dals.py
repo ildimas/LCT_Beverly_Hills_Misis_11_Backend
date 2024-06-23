@@ -1,4 +1,4 @@
-from typing import Union, List, Optional
+from typing import Union, List, Optional, BinaryIO
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from fastapi import  HTTPException
@@ -7,15 +7,22 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from datetime import datetime, timedelta
 # from core.db import async_session
-from models import User, Category, Allocation, ReferenceBook, BillToPay
-
+from models import User, Category, Allocation, ReferenceBook, BillToPay, Predictions
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import SQLAlchemyError
+from Algo.sber_algo import MainAllocationAssembler
+from ML.predictions1 import MashineLearning
+#!################ LOGER #################
+from API.App.core.loging_config import LogConfig
 from logging.config import dictConfig
 import logging
-from API.App.core.loging_config import LogConfig
 dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("washingtonsilver")
 
+#!########################################
 class UserDAL:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
@@ -101,6 +108,37 @@ class AllocationDAL:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
         
+    async def _check_allocation_objects(self, inspected_object_class, alloc_id: UUID, user_id: UUID) -> bool:
+        query = select(inspected_object_class).where(
+            and_(inspected_object_class.user_id == user_id,
+                 inspected_object_class.alloc_id == alloc_id)
+        )
+        try:
+            res = await self.db_session.execute(query)
+            obj = res.scalar_one_or_none()
+            logger.info(f"Validation object: Found !")
+            return obj is not None
+        except NoResultFound:
+            logger.error(f"No result found for user_id: {user_id} and alloc_id: {alloc_id}")
+            return False
+        except SQLAlchemyError as e:
+            logger.error(f"Database error occurred: {e}")
+            return False
+    
+    async def _get_allocation_objects(self, inspected_object_class, alloc_id: UUID, user_id: UUID, fields: List[str]) -> dict[str, bytes]:
+        columns = [getattr(inspected_object_class, field) for field in fields]
+        query = select(*columns).where(
+            and_(inspected_object_class.user_id == user_id,
+                 inspected_object_class.alloc_id == alloc_id)
+        )
+        res = await self.db_session.execute(query)
+        obj = res.fetchone()
+        if obj is not None:
+            result = {field: getattr(obj, field) for field in fields}
+            return result
+        return {}
+    
+        
     async def show_all_allocations(self, user_id: UUID, category: Optional[str] = None) -> List[Allocation]:
         query = select(Allocation).where(Allocation.user_id == user_id)
         if category:
@@ -139,6 +177,16 @@ class AllocationDAL:
         except Exception:
             return None
         
+    async def _get_category_by_id(self, category_id: UUID, user_id : UUID) -> Union[UUID, None]:
+        query = select(Category).where(
+            and_(Category.category_id == category_id, Category.user_id == user_id))
+        res = await self.db_session.execute(query)
+        category = res.scalars().first()
+        try:
+            return category.name
+        except Exception:
+            return None
+        
     async def delete_allocation(self, allocation_name: str, category_name: str, user_id: UUID) -> Union[UUID, None]:
         query = delete(Allocation).where(
             and_(Allocation.user_id == user_id,
@@ -151,12 +199,72 @@ class AllocationDAL:
             await self.db_session.commit()  
             return deleted_allocation_row[0]
         else:
-            await self.db_session.rollback()  # Rollback in case of failure
+            await self.db_session.rollback()  
             return None 
-
-class PredictionDAL:
-     def __init__(self, db_session: AsyncSession):
-        self.db_session = db_session
+        
+        
+    async def delete_allocation_by_id(self, allocation_id: UUID, user_id: UUID) -> Union[UUID, None]:
+        query = delete(Allocation).where(
+            and_(Allocation.user_id == user_id,
+                 Allocation.alloc_id == allocation_id
+                 )).returning(Allocation.alloc_id)
+        res = await self.db_session.execute(query)
+        deleted_allocation_row = res.fetchone()
+        if deleted_allocation_row:
+            await self.db_session.commit()  
+            return deleted_allocation_row[0]
+        else:
+            await self.db_session.rollback()  
+            return None     
+        
+    #! Allocation main processing   
+    async def validate_and_process_allocation(self, allocation_id : UUID, user_id : UUID, rules : dict):
+        if (await self._check_allocation_objects(ReferenceBook, allocation_id, user_id) ==
+            await self._check_allocation_objects(BillToPay, allocation_id, user_id)) == True:
+            logger.info("Allocation validation sucsess")
+            bills_dict = await self._get_allocation_objects(BillToPay, allocation_id, user_id, ["bills_to_pay",])
+            # logger.debug(f"Bills dict - {bills_dict}")
+            reference_dict = await self._get_allocation_objects(ReferenceBook, allocation_id, user_id, ["contracts", "codes", "fixedassets", "building_squares", "contracts_to_building"])
+            logger.info(f"Allocation items: Getted!!!")
+            allocation_assembler = MainAllocationAssembler(bills_dict, reference_dict, rules)
+            await allocation_assembler.async_init()
+            logger.info("ALLOCATION ASSEMBLER INITIALIZED")
+            csv_binary, xlsx_binary = await allocation_assembler.main()
+            await self._write_allocation_results(allocation_id, user_id, csv_binary, xlsx_binary)
+        else:
+            raise HTTPException(status_code=400, detail="Required object or objects are missing")
+        
+    async def _write_allocation_results(self, allocation_id : UUID, user_id : UUID, csv_binary : BinaryIO, xlsx_binary : BinaryIO):
+        query = select(Allocation).where(
+            and_(Allocation.user_id == user_id,
+                Allocation.alloc_id == allocation_id)
+        )
+        res = await self.db_session.execute(query)
+        alloc_to_modify = res.scalar_one()
+        alloc_to_modify.alloc_result_csv = csv_binary
+        alloc_to_modify.alloc_result_xlsx = xlsx_binary
+        await self.db_session.commit()
+        
+    async def download_allocation_content(self, allocation_id : UUID, user_id : UUID, xlsx_or_csv : bool):
+        query = select(Allocation).where(
+            and_(Allocation.user_id == user_id,
+                Allocation.alloc_id == allocation_id)
+        )
+        res = await self.db_session.execute(query)
+        file_data = res.scalar_one_or_none()
+        
+        if file_data is None:
+            raise HTTPException(status_code=404, detail="Allocation not found")
+        
+        field = 'alloc_result_csv' if xlsx_or_csv else 'alloc_result_xlsx'
+        if not hasattr(file_data, field):
+            raise HTTPException(status_code=400, detail="Invalid field name")
+        
+        file_content = getattr(file_data, field)
+        if file_content is None:
+            raise HTTPException(status_code=404, detail="File content not found in the specified field")
+        return file_content
+        
     
 
 class ReferenceDAL:
@@ -179,23 +287,50 @@ class ReferenceDAL:
     
     async def _create_referencebook(self, allocation_id : UUID, user_id: UUID, files : dict) -> ReferenceBook:
         if await self.is_reference_exist(allocation_id=allocation_id, user_id=user_id,):
-            raise HTTPException(status_code=400, detail="The referencebooks already created for this allocation")
-        new_refbook = ReferenceBook(
-            user_id=user_id,
-            alloc_id=allocation_id,
+            query = select(ReferenceBook).where(
+            and_(ReferenceBook.alloc_id == allocation_id,
+            ReferenceBook.user_id == user_id))
+            res = await self.db_session.execute(query)
+            result = res.scalars().first()
             contracts=files.get("contacts"),
             codes=files.get("codes"),
             fixedassets=files.get("fixedassets"),
             building_squares=files.get("building_squares"),
             contracts_to_building=files.get("contracts_to_building"),
-        )
-        self.db_session.add(new_refbook)
-        try:
-            await self.db_session.flush()
-        except IntegrityError:
-            await self.db_session.rollback()
-            raise
-        return new_refbook
+            # Update the record
+            if files.get("contacts"):
+                result.contracts = files.get("contacts") 
+            if files.get("codes"):
+                result.codes = files.get("codes") 
+            if files.get("fixedassets"): 
+                result.fixedassets = files.get("fixedassets")
+            if files.get("building_squares"):
+                result.building_squares = files.get("building_squares") 
+            if files.get("contracts_to_building"):
+                result.contracts_to_building = files.get("contracts_to_building") 
+            try:
+                await self.db_session.commit()
+            except IntegrityError as e:
+                await self.db_session.rollback()
+                raise HTTPException(status_code=500, detail={"error": "Error with editing reference books", "details": str(e)})
+            return result
+        else: 
+            new_refbook = ReferenceBook(
+                user_id=user_id,
+                alloc_id=allocation_id,
+                contracts=files.get("contacts"),
+                codes=files.get("codes"),
+                fixedassets=files.get("fixedassets"),
+                building_squares=files.get("building_squares"),
+                contracts_to_building=files.get("contracts_to_building"),
+            )
+            self.db_session.add(new_refbook)
+            try:
+                await self.db_session.flush()
+            except IntegrityError:
+                await self.db_session.rollback()
+                raise
+            return new_refbook
     
     async def is_reference_exist(self, allocation_id: UUID, user_id: UUID) -> bool:
         query = select(ReferenceBook).where(
@@ -256,3 +391,139 @@ class BillDAL:
         else:
             logger.info(f"No reference found for allocation_id: {allocation_id} and user_id: {user_id}")
             return False
+        
+
+class PredictionDAL:
+    def __init__(self, db_session: AsyncSession):
+        self.db_session = db_session
+        
+    async def full_text_search(self, content : str, search_atribute : str, allocation_id : UUID, user_id: UUID):
+        await self.db_session.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))    
+        try:
+            q = text(f"""
+            SELECT DISTINCT t."{search_atribute}", similarity(t."{search_atribute}"::text, '{content}') AS sim
+            FROM "prediction_files" t 
+            WHERE t."{search_atribute}" ILIKE :content
+            AND t."alloc_id" = :alloc_id
+            AND t."user_id" = :user_id
+            ORDER BY sim DESC
+            LIMIT 10;
+            """)
+            
+            logging.info(f"Executing query: {q}")
+            logging.info(f"With parameters: content='%{content}%', content_raw='{content}', alloc_id='{allocation_id}', user_id='{user_id}'")
+            
+            result = await self.db_session.execute(q, {
+                'content': f'%{content}%',
+                'content_raw': content,
+                'alloc_id': str(allocation_id),
+                'user_id': str(user_id)
+            })
+            
+            res = result.fetchall()
+            return [res[c][0] for c in range(len(res))]
+            
+        except Exception as e:
+            logger.info("Similarities not find: ", e)
+            
+            fallback_query = text(f"""
+                SELECT DISTINCT t."{search_atribute}"
+                FROM "prediction_files" t
+                WHERE t."alloc_id" = :alloc_id
+                  AND t."user_id" = :user_id
+                LIMIT 10;
+                """)
+                
+            logging.warning(f"Executing fallback query: {fallback_query}")
+            logging.warning(f"With parameters: alloc_id='{allocation_id}', user_id='{user_id}'")
+            
+            fallback_result = await self.db_session.execute(fallback_query, {
+                'alloc_id': str(allocation_id),
+                'user_id': str(user_id)
+            })
+            
+            res = fallback_result.fetchall()  
+            return [res[c][0] for c in range(len(res))]
+    
+        
+        
+    async def _is_ready_for_prediction(self, allocation_id : UUID, user_id: UUID) -> Union[bool, HTTPException]:
+        query = select(Allocation).where(
+            and_(Allocation.alloc_id == allocation_id,
+            Allocation.user_id == user_id
+        ))
+        res = await self.db_session.execute(query)
+        allocation = res.scalars().first()
+        if allocation.alloc_result_csv != None and allocation.alloc_result_xlsx != None:
+            return True
+        else:
+            raise HTTPException(status_code=404, detail="Allocation results aren't found")
+        
+    
+    async def _get_allocation_xlsx_result(self, allocation_id : UUID, user_id: UUID) -> Union[BinaryIO, HTTPException]:
+        query = select(Allocation).where(
+            and_(Allocation.alloc_id == allocation_id,
+            Allocation.user_id == user_id
+        ))
+        res = await self.db_session.execute(query)
+        allocation = res.scalars().first()
+        try:
+            return allocation.alloc_result_xlsx
+        except Exception as e:
+            return HTTPException(status_code=500, detail=f"Something went wrong {e}")
+        
+        
+        
+    #! Predict core integration
+    async def start_drediction(self, allocation_id : UUID, user_id: UUID):
+        if await self._is_ready_for_prediction(allocation_id=allocation_id, user_id=user_id):
+            binary_allocation_result = await self._get_allocation_xlsx_result(allocation_id=allocation_id, user_id=user_id)
+            ml_instance = MashineLearning(binary_data=binary_allocation_result)
+            await ml_instance.main()
+            predicted_data = ml_instance.get_all_data()
+            for row in predicted_data:
+                prediction_record = Predictions(
+                user_id=user_id,
+                alloc_id=allocation_id,
+                time_period=row[0],
+                building=row[2],
+                price=row[1],
+                main_ledger_id=str(row[5]),
+                fixed_assets_id=str(row[4]),
+                fixed_assets_class=str(row[3])
+                )
+                self.db_session.add(prediction_record)
+            try:
+                await self.db_session.flush()
+            except IntegrityError:
+                await self.db_session.rollback()
+    
+    async def search_for_predictions(self, allocation_id : UUID, user_id: UUID, searchable_atribute:str, searchable_value:str, months:int):
+        start_date = datetime.now()
+        end_date = start_date + timedelta(days=30 * months)
+        query = select(Predictions).where(and_(Predictions.alloc_id == allocation_id, 
+                                               Predictions.user_id == user_id, 
+                                               getattr(Predictions, searchable_atribute) == searchable_value,
+                                               Predictions.time_period >= start_date,  
+                                               Predictions.time_period <= end_date))
+        result = await self.db_session.execute(query)
+        records = result.scalars().all()
+        return records
+    
+    
+        # # filtered_records = []
+        # # for record in records:
+        # #     if hasattr(record, 'time_period'):
+        # #         # Assume time_period is a datetime field
+        # #         start_date = record.time_period
+        # #         end_date = start_date + timedelta(days=30*months)
+        # #         if record.time_period <= end_date:
+        # #             filtered_records.append(record)
+        # # return filtered_records
+        # # query = select(Allocation).where(Allocation.user_id == user_id)
+        # # if category:
+        # #     category_uuid = await self._get_category_by_name(category, user_id)
+        # #     query = select(Allocation).where(and_(Allocation.user_id == user_id, Allocation.category_id == category_uuid))
+        # result = await self.db_session.execute(query)
+        # allocations = result.scalars().all()
+        # return allocations
