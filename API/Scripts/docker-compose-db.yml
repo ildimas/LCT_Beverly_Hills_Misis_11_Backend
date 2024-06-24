@@ -1,6 +1,6 @@
 services:
   db:
-    image: washingtonsilverstorage.cr.cloud.ru/washingtonsilver_database:latest
+    image: postgres
     container_name: db
     restart: always
     environment:
@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
   db_test:
-    image: washingtonsilverstorage.cr.cloud.ru/washingtonsilver_database:latest
+    image: postgres
     container_name: db_test
     restart: always
     environment:
