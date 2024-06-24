@@ -16,10 +16,6 @@ dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("washingtonsilver")
 #!########################################
 
-
-# bills_binary : BytesIO, contracts_buildings_binary: Optional[BytesIO],
-#                  buildings_square_binary : Optional[BytesIO], codes_binary : Optional[BytesIO],
-#                  fixed_assets_binary : Optional[BytesIO], contracts_binary : Optional[BytesIO]
 class MainAllocationAssembler:
     def __init__(self, binary_dict, reference_dict, rules_dict: dict):
         self.binary_dict = binary_dict
