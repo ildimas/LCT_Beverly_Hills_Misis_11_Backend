@@ -6,6 +6,7 @@ class LogConfig(BaseModel):
     LOGGER_NAME: str = "washingtonsilver"
     LOG_FORMAT: str = "%(levelprefix)s | %(asctime)s | %(message)s"
     LOG_LEVEL: str = "DEBUG"
+    SQLALCHEMY_LOG_LEVEL : str = "ERROR"
 
     # Logging config
     version: int = 1
@@ -23,8 +24,4 @@ class LogConfig(BaseModel):
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stderr",
         },
-    }
-    loggers: dict = {
-        LOGGER_NAME: {"handlers": ["default"], "level": LOG_LEVEL},
-        "sqlalchemy.engine": {"handlers": ["default"], "level": "INFO", "propagate": False},
     }
