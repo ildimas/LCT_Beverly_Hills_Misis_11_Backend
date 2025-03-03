@@ -76,6 +76,7 @@ class ShowAllAllocationSerializer(TunedModel):
     category_id: uuid.UUID
     alloc_id: uuid.UUID
     is_files : bool
+    is_predictions : bool
     
     
 #!####### Bills ##########

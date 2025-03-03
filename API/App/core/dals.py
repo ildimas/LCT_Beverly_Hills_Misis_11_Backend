@@ -231,6 +231,9 @@ class AllocationDAL:
             logger.info("ALLOCATION ASSEMBLER INITIALIZED")
             csv_binary, xlsx_binary = await allocation_assembler.main()
             await self._write_allocation_results(allocation_id, user_id, csv_binary, xlsx_binary)
+            # preditcion_dal = PredictionDAL(self.db_session)
+            # await preditcion_dal.start_prediction(allocation_id=allocation_id, user_id=user_id)
+            # logger.info("PREDICTION AFTER ALLOCATION CALCULATED")
         else:
             raise HTTPException(status_code=400, detail="Required object or objects are missing")
         
@@ -397,6 +400,17 @@ class PredictionDAL:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
         
+    async def health_check(self, allocation_id, user_id):
+        query = select(Predictions).where(
+            and_(
+                Predictions.alloc_id == allocation_id,
+                Predictions.user_id == user_id
+            )
+        )
+        res = await self.db_session.execute(query)
+        allocation = res.scalars().first()
+        return allocation is not None
+        
     async def full_text_search(self, content : str, search_atribute : str, allocation_id : UUID, user_id: UUID):
         await self.db_session.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))    
         try:
@@ -475,7 +489,7 @@ class PredictionDAL:
         
         
     #! Predict core integration
-    async def start_drediction(self, allocation_id : UUID, user_id: UUID):
+    async def start_prediction(self, allocation_id : UUID, user_id: UUID):
         if await self._is_ready_for_prediction(allocation_id=allocation_id, user_id=user_id):
             binary_allocation_result = await self._get_allocation_xlsx_result(allocation_id=allocation_id, user_id=user_id)
             ml_instance = MashineLearning(binary_data=binary_allocation_result)
@@ -495,8 +509,10 @@ class PredictionDAL:
                 self.db_session.add(prediction_record)
             try:
                 await self.db_session.flush()
+                logger.info("Predicitons commited sucssfully !!!")
             except IntegrityError:
                 await self.db_session.rollback()
+                logger.error("Predicitons commit falied !!!")
     
     async def search_for_predictions(self, allocation_id : UUID, user_id: UUID, searchable_atribute:str, searchable_value:str, months:int):
         start_date = datetime.now()
@@ -509,21 +525,3 @@ class PredictionDAL:
         result = await self.db_session.execute(query)
         records = result.scalars().all()
         return records
-    
-    
-        # # filtered_records = []
-        # # for record in records:
-        # #     if hasattr(record, 'time_period'):
-        # #         # Assume time_period is a datetime field
-        # #         start_date = record.time_period
-        # #         end_date = start_date + timedelta(days=30*months)
-        # #         if record.time_period <= end_date:
-        # #             filtered_records.append(record)
-        # # return filtered_records
-        # # query = select(Allocation).where(Allocation.user_id == user_id)
-        # # if category:
-        # #     category_uuid = await self._get_category_by_name(category, user_id)
-        # #     query = select(Allocation).where(and_(Allocation.user_id == user_id, Allocation.category_id == category_uuid))
-        # result = await self.db_session.execute(query)
-        # allocations = result.scalars().all()
-        # return allocations

@@ -16,10 +16,6 @@ dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("washingtonsilver")
 #!########################################
 
-
-# bills_binary : BytesIO, contracts_buildings_binary: Optional[BytesIO],
-#                  buildings_square_binary : Optional[BytesIO], codes_binary : Optional[BytesIO],
-#                  fixed_assets_binary : Optional[BytesIO], contracts_binary : Optional[BytesIO]
 class MainAllocationAssembler:
     def __init__(self, binary_dict, reference_dict, rules_dict: dict):
         self.binary_dict = binary_dict
@@ -89,16 +85,21 @@ class MainAllocationAssembler:
             for g in builds_fixed_assets[key]:
                 mult = self.input[num][7]
                 try:
-                    mult = float(mult.replace(",", ".").replace(" ", ""))
-                except ValueError:
+                    mult = float(str(mult).replace(",", ".").replace(" ", ""))
+                except AttributeError:
                     pass
                 g.append(distribution_position_num)
-                g.append(round((g[4] / all_squares_combined) * mult, 2))
+                try:
+                    g.append(round((g[4] / all_squares_combined) * mult, 2))
+                except Exception as e:
+                    logger.error(f"Exception while calculating combined price {e}")
+                    g.append(None)
                 distribution_position_num += 1
 
         for key in builds_fixed_assets:
             for j in builds_fixed_assets[key]:
-                key_data = key.replace("ЗДН ", "")
+                #! logger.info(key)
+                key_data = key[4:]
                 j.append(self.json_data.get(key_data, ["7048209010"])[0])
 
         for key in builds_fixed_assets:
@@ -129,26 +130,34 @@ class MainAllocationAssembler:
 
 if __name__ == "__main__":
     async def main():
-        filepaths_bills = ["sber_files/main.XLSX"]
-        filepaths_refs = ["sber_files/Договоры.XLSX", "sber_files/Коды услуг.XLSX", "sber_files/Основные средства.XLSX", "sber_files/Площади зданий.XLSX", "sber_files/Связь договор - здания.XLSX"]
-        filepaths_refs_keys = ["contracts", "codes", "fixedassets", "building_squares", "contracts_to_building"]
+        filepaths_bills = ["sber_files/Счета на оплату 3800-2023.XLSX", "sber_files/main.XLSX",
+                           "sber_files/Счета на оплату 5400-2023.XLSX", "sber_files/Счета на оплату 5400-2024.XLSX",
+                           "sber_files/Счета на оплату 5500-2023.XLSX", "sber_files/Счета на оплату 4200-4000-3800-2024.XLSX"]
+        for file_path_bills in filepaths_bills:
+            result = []
+            filepaths_refs = ["sber_files/Договоры.XLSX", "sber_files/Коды услуг.XLSX", "sber_files/Основные средства.XLSX", "sber_files/Площади зданий.XLSX", "sber_files/Связь договор - здания.XLSX"]
+            filepaths_refs_keys = ["contracts", "codes", "fixedassets", "building_squares", "contracts_to_building"]
 
-        bin_dict = {
-            "bills_to_pay": open(filepaths_bills[0], "rb").read() if os.path.exists(filepaths_bills[0]) else None
-        }
-        ref_dict = {
-            key: open(fp, "rb").read() if os.path.exists(fp) else None
-            for key, fp in zip(filepaths_refs_keys, filepaths_refs)
-        }
-        rules = {}
-        print("dicts filled")
+            bin_dict = {
+                "bills_to_pay": open(file_path_bills, "rb").read() if os.path.exists(file_path_bills) else None
+            }
+            ref_dict = {
+                key: open(fp, "rb").read() if os.path.exists(fp) else None
+                for key, fp in zip(filepaths_refs_keys, filepaths_refs)
+            }
+            rules = {}
+            print("dicts filled")
 
-        assembler = MainAllocationAssembler(binary_dict=bin_dict, reference_dict=ref_dict, rules_dict=rules)
-        await assembler.async_init()
-        print("assembler initialized")
+            assembler = MainAllocationAssembler(binary_dict=bin_dict, reference_dict=ref_dict, rules_dict=rules)
+            await assembler.async_init()
+            print("assembler initialized")
 
-        csv_binary, xlsx_binary = await assembler.main()
-        print("csv_binary", csv_binary)
-        print("xlsx_binary", xlsx_binary)
+            csv_binary, xlsx_binary = await assembler.main()
+            print("csv_binary", csv_binary[:100])
+            print("xlsx_binary", xlsx_binary[:100])
+            if csv_binary != None and xlsx_binary != None:
+                result.append(True)
+            else:
+                result.append(False)
         
     asyncio.run(main())

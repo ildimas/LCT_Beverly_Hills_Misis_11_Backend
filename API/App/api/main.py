@@ -16,6 +16,7 @@ from starlette.middleware.cors import CORSMiddleware
 from logging.config import dictConfig
 import logging
 from API.App.core.loging_config import LogConfig
+
 dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("washingtonsilver")
 

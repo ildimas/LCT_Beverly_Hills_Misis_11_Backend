@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from API.App.core.models import User, Category
 from typing import List, Optional
-from API.App.core.dals import AllocationDAL
+from API.App.core.dals import AllocationDAL, PredictionDAL
 from API.App.core.serializer import CreateAllocationSerializer, ShowAllocationSerializer, DeleteAllocationSerializer, ShowAllAllocationSerializer, ProcessAllocationInput, DownloadAllocation
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -75,21 +75,30 @@ async def _delete_allocation_by_id(body: DeleteAllocationSerializer, session, cu
 async def _show_all_allocations(session, current_user : User , category : Optional[str]) -> ShowAllAllocationSerializer:
     async with session.begin():
         dal = AllocationDAL(session)
+        pred_dal = PredictionDAL(session)
         result_allocations = await dal.show_all_allocations(current_user.user_id, category=category)
         data = []
         for allocation in result_allocations:
             all_cat_name = await dal._get_category_by_id(user_id=current_user.user_id, category_id=allocation.category_id)
             files_status = ((allocation.alloc_result_csv != None) and (allocation.alloc_result_xlsx != None))
-            data.append(ShowAllAllocationSerializer(name=allocation.name, category_name=all_cat_name, user_id=allocation.user_id, category_id=allocation.category_id, alloc_id=allocation.alloc_id, is_files=files_status))
+            predicions_status = await pred_dal.health_check(allocation_id=allocation.alloc_id, user_id=current_user.user_id)
+            data.append(ShowAllAllocationSerializer(name=allocation.name, category_name=all_cat_name, user_id=allocation.user_id, category_id=allocation.category_id, alloc_id=allocation.alloc_id, is_files=files_status, is_predictions=predicions_status))
         return data
     
 
-async def _start_allocation_process(session, allocation_id : UUID ,current_user : User, rules : dict):
-    #! process
+async def _start_allocation_process(session, allocation_id: UUID, current_user: User, rules: dict):
+    #! process allocation
     async with session.begin():
         dal = AllocationDAL(session)
         await dal.validate_and_process_allocation(allocation_id=allocation_id, user_id=current_user.user_id, rules=rules)
-        return {"message": "Allocation have been sucsessfuly created and stored in database"}
+
+    #! process prediction in a new session
+    async with session.begin():
+        pred_dal = PredictionDAL(session)
+        await pred_dal.start_prediction(allocation_id=allocation_id, user_id=current_user.user_id)
+
+    return {"message": "Allocation and Predictions have been successfully created and stored in database"}
+
     
     
 async def _download_content(session: AsyncSession, allocation_id: UUID, current_user: User, xlsx_or_csv: bool):
