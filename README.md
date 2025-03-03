@@ -254,3 +254,4 @@ ML - [BelugaChan](https://github.com/BelugaChan)
 
 ## Лицензия
 [MIT License](https://github.com/ildimas/LCT_Beverly_Hills_Misis_11_Backend/blob/main/LICENSE)
+
